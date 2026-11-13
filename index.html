@@ -393,6 +393,7 @@ em.own { cursor: pointer; text-decoration: underline dotted; text-underline-offs
 })();
 </script>
 <head>
+<script src="desktop.js"></script>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -3445,7 +3446,8 @@ function renderAI() {
 
 // ---------- échanges avec l'IA ----------
 // ---------- choix de l'IA : clé API perso ----------
-const AI_PROVIDERS = {
+ const netFetch = (...a) => (window.DESK ? window.DESK.fetch(...a) : fetch(...a));
+ const AI_PROVIDERS = {
   cf: { name: "Cloudflare (relais actuel)", short: "Cloudflare", web: false, info: "Gratuit, sans clé. Pas de recherche internet." },
   gemini: { name: "Google Gemini", short: "Gemini", model: "gemini-2.5-flash", web: true, link: "https://aistudio.google.com/apikey", info: "Gratuit avec quota. Recherche Google intégrée." },
   groq: { name: "Groq Compound", short: "Groq", model: "groq/compound", web: true, link: "https://console.groq.com/keys", info: "Gratuit avec quota. Très rapide, recherche web intégrée." },
@@ -3460,9 +3462,13 @@ function aiCfg() {
   if (!AI_PROVIDERS[c.p]) c.p = "cf";
   c.keys = c.keys || {}; c.models = c.models || {};
   if (c.web === undefined) c.web = true;
+  if (window.DESK) c.keys = { ...window.DESK.keys };
   return c;
 }
-function saveAiCfg(c) { try { localStorage.setItem(AI_CFG_KEY, JSON.stringify(c)); } catch (e) { toast("Impossible d'enregistrer les réglages de l'IA."); } }
+function saveAiCfg(c) {
+  if (window.DESK) { window.DESK.saveKeys(c.keys); c = { ...c, keys: {} }; }
+  try { localStorage.setItem(AI_CFG_KEY, JSON.stringify(c)); } catch (e) { toast("Impossible d'enregistrer les réglages de l'IA."); }
+}
 function aiReady() { const c = aiCfg(); return c.p === "cf" ? !!proxyBase() : !!(c.keys[c.p] || "").trim(); }
 function webNote(p) {
   return `\n\nRECHERCHE INTERNET (ceci remplace ce qui est dit plus haut sur la date de tes connaissances)
@@ -3523,7 +3529,7 @@ async function providerError(r, P) {
 }
 async function streamCF(messages, bot, signal) {
   if (!proxyBase()) throw new Error("Le relais Cloudflare n'est pas configuré (PROXY_URL).");
-  const r = await fetch(proxyBase() + "/ai", {
+  const r = await netFetch(proxyBase() + "/ai", {
     method: "POST", headers: { "Content-Type": "application/json" }, signal,
     body: JSON.stringify({ model: S.prefs.aiModel, max_tokens: (LENGTHS[S.prefs.aiLength] || LENGTHS.normal)[1], messages }),
   });
@@ -3606,7 +3612,7 @@ async function streamAI(messages, bot, signal, noWeb) {
     };
   }
 
-  const r = await fetch(url, { method: "POST", headers, body: JSON.stringify(body), signal });
+  const r = await netFetch(url, { method: "POST", headers, body: JSON.stringify(body), signal });
   if (!r.ok) throw await providerError(r, P);
   await readSSE(r, eat);
   if (sources.length && bot.content.trim()) {
